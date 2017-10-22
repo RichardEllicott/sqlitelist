@@ -16,14 +16,22 @@ import pickle
 
 class SqliteList(object):
     '''
-    Version 1, experimental, not even a list yet
+    Version 1, experimental
     '''
 
+    tablename = 'unnamed'
+
     def create_table(self):
-        self.c.execute('CREATE TABLE IF NOT EXISTS unnamed (id INTEGER PRIMARY KEY AUTOINCREMENT, value BLOB)')
+        '''
+        create table if it does not exist
+        '''
+        self.c.execute('CREATE TABLE IF NOT EXISTS "%s" (id INTEGER PRIMARY KEY AUTOINCREMENT, value BLOB)' % self.tablename)
 
     def drop_table(self):
-        self.c.execute('DROP TABLE unnamed')
+        '''
+        drop table
+        '''
+        self.c.execute('DROP TABLE "%s"' % self.tablename)
 
     def __init__(self, filename, pickle_data=True, autocommit=True):
 
@@ -41,7 +49,7 @@ class SqliteList(object):
         if self.pickle_data:
             value = pickle.dumps(value)
         value = (value,)
-        self.c.execute('INSERT INTO unnamed(value) VALUES (?)', value)
+        self.c.execute('INSERT INTO "%s"(value) VALUES (?)' % self.tablename, value)
         if self.autocommit:
             self.conn.commit()
 
@@ -52,11 +60,7 @@ class SqliteList(object):
         s += 'filename: \'{}\'\n'.format(self.filename)
         s += 'length: {}\n'.format(len(self))
         s += '-' * 32 + '\n'
-
         s += '{}\t|{}\t|{}\t|{}\n'.format('id', 'key', 'type', 'value')
-
-        # print('{}\t{}\t{}'.format('id','type','value'))
-
         list_key = 0
         for row in self.c.execute('SELECT * FROM unnamed'):
             key = row[0]
@@ -66,25 +70,11 @@ class SqliteList(object):
             s += '{}\t|{}\t\t|{}\t|{}\n'.format(key, list_key, type(val).__name__ + ' ', val)
             list_key += 1
         s += '#' * 16
-
         return s
 
-    def __iter__(self):
-        return self.__list__()
 
-    def __list__(self):
-        new_list = []
-        # for row in self.c.execute('SELECT * FROM unnamed'):
-        for row in self.c.execute('SELECT value FROM unnamed'):
-            val = row[0]
-            if self.pickle_data:
-                val = pickle.loads(val)
-            new_list.append(val)
-        return new_list
-        # data = self.c.execute('SELECT value FROM unnamed').fetchall()
-        # print(data)
 
-    def __id_list__(self):
+    def get_ids(self):
         new_list = []
         for row in self.c.execute('SELECT id FROM unnamed'):
             val = row[0]
@@ -93,22 +83,27 @@ class SqliteList(object):
             new_list.append(val)
         return new_list
 
-    # def __iter__(self):
-    #     # for i in range(self.n):
-    #     #     yield i * i
-    #     return self.get_list()
+    def encode(self, value):
+        if self.pickle_data:
+            value = pickle.dumps(value)
+        return value
 
-    #     # this may be more effecient
-    #     # https://stackoverflow.com/questions/2854011/get-a-list-of-field-values-from-pythons-sqlite3-not-tuples-representing-rows
-    #     pass
+    def decode(self, value):
+        if self.pickle_data:
+            value = pickle.loads(value)
+        return value
+
+    def __iter__(self):
+        '''
+        allows conversion to list/tuples etc
+        '''
+        # GET_VALUES = 'SELECT value FROM "%s" ORDER BY id' % self.tablename
+        GET_VALUES = 'SELECT value FROM "%s"' % self.tablename
+        for value in self.c.execute(GET_VALUES):  # this varied from sqlitedict
+            yield self.decode(value[0])
 
     def __add__(self, other):
-        try:
-            other = other.__list__()
-        except AttributeError as e:
-            # print(type(e),e)
-            pass
-        return self.__list__() + other
+        return list(self) + list(other)
 
     def __len__(self):
         self.c.execute('SELECT Count(*) FROM unnamed')
@@ -170,6 +165,9 @@ class SqliteList(object):
             self.append(val)
 
     def insert(self, position, val):
+        '''
+        highly ineffecient as this involves rebuilding the database!
+        '''
         if position > len(self):
             raise Exception('position {} is longer than length {}'.format(position, len(self)))
         elif position < 0:
@@ -178,25 +176,9 @@ class SqliteList(object):
         new_list = this_list[:position] + [val] + this_list[position:]
         self.overwrite_all(new_list)
 
-    def add_with_id(self, id, val):
-        '''
-        not implemented
-        '''
-        pass
+    
 
-    def segment(self, start_pos=0, end_pos=3):
-        '''
-        todo can be dropped
-        not implemented
-        '''
-        self.c.execute('SELECT * FROM unnamed ORDER BY ROWID ASC LIMIT {}'.format(end_pos))
-        row = self.c.fetchall()
-        print ('segment', row)
-        pass
 
-    def listkey_to_db_id(self, key):
-
-        pass
 
     def __getitem__(self, key):
         if key == 0:  # optimized
@@ -204,7 +186,7 @@ class SqliteList(object):
         elif(key == len(self) - 1):  # optimized
             return self.get_last()
         else:  # unoptimal, gets all
-            return self.__list__()[key]
+            return list(self)[key]
 
     def __setitem__(self, key, value):
         '''
@@ -219,20 +201,34 @@ class SqliteList(object):
         only fast for last and first record
         '''
         if key == 0:  # deleting first value, optimized
+            print('SQLITELIST optimized route!!')
             self.delete_first()
         elif(key == len(self) - 1):  # deleting last value., optimized
+            print('SQLITELIST optimized route!!')
             self.delete_last()
         else:  # unoptimal, recreates list
-            new_list = self.__list__()
+            print('SQLITELIST WARNING, recreating entire DB')
+            new_list = list(self)
             del(new_list[key])
             self.overwrite_all(new_list)
 
     def __repr__(self):
-        # return 'SqliteList(' + str(self.__list__()) + ')'
         return 'SqliteList(\'{}\')'.format(self.filename)
 
     def random_id(self):
         return random.choice(self.__id_list__())
+
+    def get_by_row(self, row_number):
+        '''
+        get record by the row number, this is unusual practise for a database
+        https://stackoverflow.com/questions/14782559/how-to-get-a-row-in-sqlite-by-index-not-by-id
+        '''
+        self.c.execute('SELECT * FROM unnamed LIMIT 1 OFFSET {}'.format(row_number))
+        row = self.c.fetchone()
+        val = row[1]
+        if self.pickle_data:
+            val = pickle.loads(val)
+        return val
 
     # def __unicode__(self):
     #     return unicode(self.__list__())
