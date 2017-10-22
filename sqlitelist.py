@@ -7,6 +7,14 @@ Sources:
 # http://sebastianraschka.com/Articles/2014_sqlite_in_python_tutorial.html
 
 
+#override get slice for faster slicing
+#https://stackoverflow.com/questions/31874952/how-to-raise-an-indexerror-when-slice-indices-are-out-of-range
+def __getslice__(self, i, j):
+        len_ = len(self)
+        if i > len_ or j > len_:
+            raise IndexError('list index out of range')
+        return super(MyList, self).__getslice__(i, j)
+
 
 '''
 from __future__ import absolute_import, division, print_function
@@ -72,8 +80,6 @@ class SqliteList(object):
         s += '#' * 16
         return s
 
-
-
     def get_ids(self):
         new_list = []
         for row in self.c.execute('SELECT id FROM unnamed'):
@@ -121,6 +127,9 @@ class SqliteList(object):
             self.conn.commit()
 
     def get_last(self):
+        '''
+        may be depreciated
+        '''
         self.c.execute('SELECT * FROM unnamed WHERE id = (SELECT MAX(ID) FROM unnamed)')
         # self.c.execute('SELECT * FROM unnamed ORDER BY id DESC LIMIT 1')  # different syntax
         row = self.c.fetchone()
@@ -131,6 +140,7 @@ class SqliteList(object):
 
     def delete_last(self):
         '''
+        may be depreciated
         delete row with highest id
         '''
         self.c.execute('DELETE FROM unnamed WHERE id = (SELECT MAX(id) FROM unnamed)')
@@ -138,6 +148,9 @@ class SqliteList(object):
             self.conn.commit()
 
     def get_first(self):
+        '''
+        may be depreciated
+        '''
         # https://stackoverflow.com/questions/5408201/how-to-get-first-top-row-of-the-table-in-sqlite-via-sql-query
         # self.c.execute('SELECT * FROM unnamed ORDER BY ROWID ASC LIMIT 1')
         self.c.execute('SELECT * FROM unnamed WHERE id = (SELECT MIN(id) FROM unnamed)')
@@ -148,6 +161,9 @@ class SqliteList(object):
         return val
 
     def delete_first(self):
+        '''
+        may be depreciated
+        '''
         self.c.execute('DELETE FROM unnamed WHERE id = (SELECT MIN(id) FROM unnamed)')
         if self.autocommit:
             self.conn.commit()
@@ -160,6 +176,9 @@ class SqliteList(object):
             self.conn.commit()
 
     def overwrite_all(self, new_list):
+        '''
+        clears the whole database and writes in new values from an iterator object (like a list)
+        '''
         self.clear()
         for val in new_list:
             self.append(val)
@@ -176,17 +195,31 @@ class SqliteList(object):
         new_list = this_list[:position] + [val] + this_list[position:]
         self.overwrite_all(new_list)
 
-    
-
-
-
     def __getitem__(self, key):
-        if key == 0:  # optimized
-            return self.get_first()
-        elif(key == len(self) - 1):  # optimized
-            return self.get_last()
-        else:  # unoptimal, gets all
-            return list(self)[key]
+
+        # # version 1, creates an entire list which is slow but it works
+        # if key == 0:  # optimized
+        #     return self.get_first()
+        # elif(key == len(self) - 1):  # optimized
+        #     return self.get_last()
+        # else:  # unoptimal, gets all
+        #     return list(self)[key]
+
+        # version 2, should be faster
+        # note how this uses no id! it's strange but i think safe
+
+        if key >= len(self):  # if the index is too high throw error
+            raise IndexError('list index out of range')
+        if key < 0:  # if the index is negative, work our new key
+            key = len(self) + key
+            if key < 0:
+                raise IndexError('list index out of range')  # if our new key ends up negative again, throw index error
+
+        self.c.execute('SELECT * FROM unnamed LIMIT 1 OFFSET {}'.format(key))
+        row = self.c.fetchone()
+        val = row[1]
+        val = self.decode(val)
+        return val
 
     def __setitem__(self, key, value):
         '''
@@ -226,8 +259,7 @@ class SqliteList(object):
         self.c.execute('SELECT * FROM unnamed LIMIT 1 OFFSET {}'.format(row_number))
         row = self.c.fetchone()
         val = row[1]
-        if self.pickle_data:
-            val = pickle.loads(val)
+        val = self.decode(val)
         return val
 
     # def __unicode__(self):
