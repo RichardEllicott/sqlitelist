@@ -137,7 +137,7 @@ class SqliteList(object):
         '''
         delete row by id
         '''
-        self.c.execute('DELETE FROM unnamed WHERE id = (?)', (row_id,))
+        self.c.execute('DELETE FROM %s WHERE id = (?)'%self.table, (row_id,))
         if self.autocommit:
             self.conn.commit()
 
@@ -184,7 +184,7 @@ class SqliteList(object):
     #         self.conn.commit()
 
     def clear(self):
-        self.c.execute('DELETE FROM unnamed')
+        self.c.execute('DELETE FROM %s'%self.table)
         # self.drop_table()
         # self.create_table()
         if self.autocommit:
@@ -223,12 +223,12 @@ class SqliteList(object):
         # version 2, should be faster
         # note how this uses no id! it's strange but i think safe
 
-        if index >= len(self):  # if the index is too high throw error
-            raise IndexError('list index out of range')
-        if index < 0:  # if the index is negative, work our new key
-            index = len(self) + index
-            if index < 0:
-                raise IndexError('list index out of range')  # if our new key ends up negative again, throw index error
+        # if index >= len(self):  # if the index is too high throw error
+        #     raise IndexError('list index out of range')
+        # if index < 0:  # if the index is negative, work our new key
+        #     index = len(self) + index
+        #     if index < 0:
+        #         raise IndexError('list index out of range')  # if our new key ends up negative again, throw index error
 
         self.c.execute('SELECT value FROM unnamed LIMIT 1 OFFSET %s' % index)
         row = self.c.fetchone()
@@ -236,13 +236,21 @@ class SqliteList(object):
         val = self.decode(val)
         return val
 
-    def get_rowid_by_index(self, row_number):
+    def get_rowid_by_index(self, index):
         '''
         index as defined as the actual sequnece, first entry=0, second=1 etc
         get record by the row number, this is unusual practise for a database
         https://stackoverflow.com/questions/14782559/how-to-get-a-row-in-sqlite-by-index-not-by-id
         '''
-        self.c.execute('SELECT _rowid_ FROM unnamed LIMIT 1 OFFSET %s' % row_number)
+
+        if index >= len(self):  # if the index is too high throw error
+            raise IndexError('list index out of range')
+        if index < 0:  # if the index is negative, work our new key
+            index = len(self) + index
+            if index < 0:
+                raise IndexError('list index out of range')  # if our new key ends up negative again, throw index error
+
+        self.c.execute('SELECT _rowid_ FROM unnamed LIMIT 1 OFFSET %s' % index)
         row = self.c.fetchone()
         return row[0]
 
@@ -266,6 +274,15 @@ class SqliteList(object):
         self.c.execute('DELETE FROM unnamed WHERE _rowid_ = %s' % rowid)
         if self.autocommit:
             self.conn.commit()
+
+    def remove(self,value):
+        '''
+        experimental
+        '''
+        self.c.execute('DELETE FROM unnamed WHERE value = %s' % value)
+        if self.autocommit:
+            self.conn.commit()
+
 
     def __repr__(self):
         return 'SqliteList(\'{}\')'.format(self.filename)
