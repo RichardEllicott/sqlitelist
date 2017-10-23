@@ -33,7 +33,10 @@ class SqliteList(object):
         '''
         create table if it does not exist
         '''
-        self.c.execute('CREATE TABLE IF NOT EXISTS "%s" (id INTEGER PRIMARY KEY AUTOINCREMENT, value BLOB)' % self.tablename)
+        # v1 with id
+        # self.c.execute('CREATE TABLE IF NOT EXISTS "%s" (id INTEGER PRIMARY KEY AUTOINCREMENT, value BLOB)' % self.tablename)
+        # v2 no id
+        self.c.execute('CREATE TABLE IF NOT EXISTS "%s" (value BLOB)' % self.tablename)
 
     def drop_table(self):
         '''
@@ -68,21 +71,35 @@ class SqliteList(object):
         s += 'filename: \'{}\'\n'.format(self.filename)
         s += 'length: {}\n'.format(len(self))
         s += '-' * 32 + '\n'
-        s += '{}\t|{}\t|{}\t|{}\n'.format('id', 'key', 'type', 'value')
-        list_key = 0
-        for row in self.c.execute('SELECT * FROM unnamed'):
-            key = row[0]
+        s += '{}\t|{}\t|{}\t|{}\t|{}\n'.format('key', 'rowid', 'id\t', 'type', 'value')
+        index = 0
+        for row in self.c.execute('SELECT _rowid_,* FROM unnamed'):
+            rowid = row[0]
+            # v1 with id
+            # _id = row[1]
+            # val = row[2]
+            # v2 no id
+            _id = None
             val = row[1]
-            if self.pickle_data:
-                val = pickle.loads(val)
-            s += '{}\t|{}\t\t|{}\t|{}\n'.format(key, list_key, type(val).__name__ + ' ', val)
-            list_key += 1
+
+            val = self.decode(val)
+            s += '{}\t|{}\t\t|{}\t\t|{}\t|{}\n'.format(index, rowid, _id, type(val).__name__ + ' ', val)
+            index += 1
         s += '#' * 16
         return s
 
     def get_ids(self):
         new_list = []
         for row in self.c.execute('SELECT id FROM unnamed'):
+            val = row[0]
+            # if self.pickle_data:
+            #     val = pickle.loads(val)
+            new_list.append(val)
+        return new_list
+
+    def get_rowids(self):
+        new_list = []
+        for row in self.c.execute('SELECT _rowid_ FROM unnamed'):
             val = row[0]
             # if self.pickle_data:
             #     val = pickle.loads(val)
@@ -111,12 +128,14 @@ class SqliteList(object):
     def __add__(self, other):
         return list(self) + list(other)
 
+    last_length = None
+
     def __len__(self):
         self.c.execute('SELECT Count(*) FROM unnamed')
         return self.c.fetchone()[0]
 
     def commit(self):
-        self.con.commit()
+        self.conn.commit()
 
     def delete_by_id(self, row_id):
         '''
@@ -126,47 +145,47 @@ class SqliteList(object):
         if self.autocommit:
             self.conn.commit()
 
-    def get_last(self):
-        '''
-        may be depreciated
-        '''
-        self.c.execute('SELECT * FROM unnamed WHERE id = (SELECT MAX(ID) FROM unnamed)')
-        # self.c.execute('SELECT * FROM unnamed ORDER BY id DESC LIMIT 1')  # different syntax
-        row = self.c.fetchone()
-        val = row[1]
-        if self.pickle_data:
-            val = pickle.loads(val)
-        return val
+    # def get_last(self):
+    #     '''
+    #     may be depreciated
+    #     '''
+    #     self.c.execute('SELECT * FROM unnamed WHERE id = (SELECT MAX(ID) FROM unnamed)')
+    #     # self.c.execute('SELECT * FROM unnamed ORDER BY id DESC LIMIT 1')  # different syntax
+    #     row = self.c.fetchone()
+    #     val = row[1]
+    #     if self.pickle_data:
+    #         val = pickle.loads(val)
+    #     return val
 
-    def delete_last(self):
-        '''
-        may be depreciated
-        delete row with highest id
-        '''
-        self.c.execute('DELETE FROM unnamed WHERE id = (SELECT MAX(id) FROM unnamed)')
-        if self.autocommit:
-            self.conn.commit()
+    # def delete_last(self):
+    #     '''
+    #     may be depreciated
+    #     delete row with highest id
+    #     '''
+    #     self.c.execute('DELETE FROM unnamed WHERE id = (SELECT MAX(id) FROM unnamed)')
+    #     if self.autocommit:
+    #         self.conn.commit()
 
-    def get_first(self):
-        '''
-        may be depreciated
-        '''
-        # https://stackoverflow.com/questions/5408201/how-to-get-first-top-row-of-the-table-in-sqlite-via-sql-query
-        # self.c.execute('SELECT * FROM unnamed ORDER BY ROWID ASC LIMIT 1')
-        self.c.execute('SELECT * FROM unnamed WHERE id = (SELECT MIN(id) FROM unnamed)')
-        row = self.c.fetchone()
-        val = row[1]
-        if self.pickle_data:
-            val = pickle.loads(val)
-        return val
+    # def get_first(self):
+    #     '''
+    #     may be depreciated
+    #     '''
+    #     # https://stackoverflow.com/questions/5408201/how-to-get-first-top-row-of-the-table-in-sqlite-via-sql-query
+    #     # self.c.execute('SELECT * FROM unnamed ORDER BY ROWID ASC LIMIT 1')
+    #     self.c.execute('SELECT * FROM unnamed WHERE id = (SELECT MIN(id) FROM unnamed)')
+    #     row = self.c.fetchone()
+    #     val = row[1]
+    #     if self.pickle_data:
+    #         val = pickle.loads(val)
+    #     return val
 
-    def delete_first(self):
-        '''
-        may be depreciated
-        '''
-        self.c.execute('DELETE FROM unnamed WHERE id = (SELECT MIN(id) FROM unnamed)')
-        if self.autocommit:
-            self.conn.commit()
+    # def delete_first(self):
+    #     '''
+    #     may be depreciated
+    #     '''
+    #     self.c.execute('DELETE FROM unnamed WHERE id = (SELECT MIN(id) FROM unnamed)')
+    #     if self.autocommit:
+    #         self.conn.commit()
 
     def clear(self):
         self.c.execute('DELETE FROM unnamed')
@@ -191,11 +210,11 @@ class SqliteList(object):
             raise Exception('position {} is longer than length {}'.format(position, len(self)))
         elif position < 0:
             raise Exception('position {} is less than 0'.format(position))
-        this_list = self.__list__()
+        this_list = list(self)
         new_list = this_list[:position] + [val] + this_list[position:]
         self.overwrite_all(new_list)
 
-    def __getitem__(self, key):
+    def __getitem__(self, index):
 
         # # version 1, creates an entire list which is slow but it works
         # if key == 0:  # optimized
@@ -208,59 +227,57 @@ class SqliteList(object):
         # version 2, should be faster
         # note how this uses no id! it's strange but i think safe
 
-        if key >= len(self):  # if the index is too high throw error
+        if index >= len(self):  # if the index is too high throw error
             raise IndexError('list index out of range')
-        if key < 0:  # if the index is negative, work our new key
-            key = len(self) + key
-            if key < 0:
+        if index < 0:  # if the index is negative, work our new key
+            index = len(self) + index
+            if index < 0:
                 raise IndexError('list index out of range')  # if our new key ends up negative again, throw index error
 
-        self.c.execute('SELECT * FROM unnamed LIMIT 1 OFFSET {}'.format(key))
+        self.c.execute('SELECT value FROM unnamed LIMIT 1 OFFSET %s' % index)
         row = self.c.fetchone()
-        val = row[1]
+        val = row[0]
         val = self.decode(val)
         return val
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, index, value):
         '''
         unoptimal, recreates list 
         '''
-        new_list = self.__list__()
-        new_list[key] = value
-        self.overwrite_all(new_list)
 
-    def __delitem__(self, key):
-        '''
-        only fast for last and first record
-        '''
-        if key == 0:  # deleting first value, optimized
-            print('SQLITELIST optimized route!!')
-            self.delete_first()
-        elif(key == len(self) - 1):  # deleting last value., optimized
-            print('SQLITELIST optimized route!!')
-            self.delete_last()
-        else:  # unoptimal, recreates list
-            print('SQLITELIST WARNING, recreating entire DB')
-            new_list = list(self)
-            del(new_list[key])
-            self.overwrite_all(new_list)
+        # version 1, just recreate the entire list, reference implementation
+        # new_list = self.__list__()
+        # new_list[key] = value
+        # self.overwrite_all(new_list)
+
+        # version 2
+        # UPDATE COMPANY SET ADDRESS = 'Texas' WHERE ID = 6;
+        # https://www.tutorialspoint.com/sqlite/sqlite_update_query.htm
+        # id neutral
+        rowid = self.get_rowid_by_index(index)
+        value = self.encode(value)
+        self.c.execute('UPDATE unnamed SET value=? WHERE _rowid_ = %s' % rowid, (value,))
+        if self.autocommit:
+            self.conn.commit()
+
+    def __delitem__(self, index):
+        rowid = self.get_rowid_by_index(index)
+        self.c.execute('DELETE FROM unnamed WHERE _rowid_ = %s' % rowid)
+        if self.autocommit:
+            self.conn.commit()
 
     def __repr__(self):
         return 'SqliteList(\'{}\')'.format(self.filename)
 
-    def random_id(self):
-        return random.choice(self.__id_list__())
-
-    def get_by_row(self, row_number):
+    def get_rowid_by_index(self, row_number):
         '''
+        index as defined as the actual sequnece, first entry=0, second=1 etc
         get record by the row number, this is unusual practise for a database
         https://stackoverflow.com/questions/14782559/how-to-get-a-row-in-sqlite-by-index-not-by-id
         '''
-        self.c.execute('SELECT * FROM unnamed LIMIT 1 OFFSET {}'.format(row_number))
+        self.c.execute('SELECT _rowid_ FROM unnamed LIMIT 1 OFFSET %s' % row_number)
         row = self.c.fetchone()
-        val = row[1]
-        val = self.decode(val)
-        return val
+        return row[0]
 
     # def __unicode__(self):
     #     return unicode(self.__list__())
