@@ -44,7 +44,7 @@ def fill_random_data_test():
 
 
 
-# del(sqlitelist[5])
+# del(sqlitelist[0])
 
 # sqlitelist.insert(3,'bbbb')
 
@@ -55,4 +55,6 @@ print(list(sqlitelist))
 
 print(sqlitelist[-1])
 
+
+# print(sqlitelist.get_random_index())
 

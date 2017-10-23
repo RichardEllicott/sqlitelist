@@ -21,13 +21,15 @@ from __future__ import absolute_import, division, print_function
 import sqlite3
 import pickle
 
+import random
+
 
 class SqliteList(object):
     '''
     Version 1, experimental
     '''
 
-    tablename = 'unnamed'
+    table = 'unnamed'
 
     def create_table(self):
         '''
@@ -36,13 +38,13 @@ class SqliteList(object):
         # v1 with id
         # self.c.execute('CREATE TABLE IF NOT EXISTS "%s" (id INTEGER PRIMARY KEY AUTOINCREMENT, value BLOB)' % self.tablename)
         # v2 no id
-        self.c.execute('CREATE TABLE IF NOT EXISTS "%s" (value BLOB)' % self.tablename)
+        self.c.execute('CREATE TABLE IF NOT EXISTS "%s" (value BLOB)' % self.table)
 
     def drop_table(self):
         '''
         drop table
         '''
-        self.c.execute('DROP TABLE "%s"' % self.tablename)
+        self.c.execute('DROP TABLE "%s"' % self.table)
 
     def __init__(self, filename, pickle_data=True, autocommit=True):
 
@@ -60,7 +62,7 @@ class SqliteList(object):
         if self.pickle_data:
             value = pickle.dumps(value)
         value = (value,)
-        self.c.execute('INSERT INTO "%s"(value) VALUES (?)' % self.tablename, value)
+        self.c.execute('INSERT INTO "%s"(value) VALUES (?)' % self.table, value)
         if self.autocommit:
             self.conn.commit()
 
@@ -73,7 +75,7 @@ class SqliteList(object):
         s += '-' * 32 + '\n'
         s += '{}\t|{}\t|{}\t|{}\t|{}\n'.format('key', 'rowid', 'id\t', 'type', 'value')
         index = 0
-        for row in self.c.execute('SELECT _rowid_,* FROM unnamed'):
+        for row in self.c.execute('SELECT _rowid_,* FROM %s' % self.table):
             rowid = row[0]
             # v1 with id
             # _id = row[1]
@@ -88,23 +90,23 @@ class SqliteList(object):
         s += '#' * 16
         return s
 
-    def get_ids(self):
-        new_list = []
-        for row in self.c.execute('SELECT id FROM unnamed'):
-            val = row[0]
-            # if self.pickle_data:
-            #     val = pickle.loads(val)
-            new_list.append(val)
-        return new_list
+    # def get_ids(self):
+    #     new_list = []
+    #     for row in self.c.execute('SELECT id FROM unnamed'):
+    #         val = row[0]
+    #         # if self.pickle_data:
+    #         #     val = pickle.loads(val)
+    #         new_list.append(val)
+    #     return new_list
 
-    def get_rowids(self):
-        new_list = []
-        for row in self.c.execute('SELECT _rowid_ FROM unnamed'):
-            val = row[0]
-            # if self.pickle_data:
-            #     val = pickle.loads(val)
-            new_list.append(val)
-        return new_list
+    # def get_rowids(self):
+    #     new_list = []
+    #     for row in self.c.execute('SELECT _rowid_ FROM unnamed'):
+    #         val = row[0]
+    #         # if self.pickle_data:
+    #         #     val = pickle.loads(val)
+    #         new_list.append(val)
+    #     return new_list
 
     def encode(self, value):
         if self.pickle_data:
@@ -121,7 +123,7 @@ class SqliteList(object):
         allows conversion to list/tuples etc
         '''
         # GET_VALUES = 'SELECT value FROM "%s" ORDER BY id' % self.tablename
-        GET_VALUES = 'SELECT value FROM "%s"' % self.tablename
+        GET_VALUES = 'SELECT value FROM "%s"' % self.table
         for value in self.c.execute(GET_VALUES):  # this varied from sqlitedict
             yield self.decode(value[0])
 
@@ -284,3 +286,7 @@ class SqliteList(object):
 
     def __str__(self):
         return self.__repr__()
+
+    def get_random_index(self):
+        length = len(self)
+        return random.randint(0, length - 1)
