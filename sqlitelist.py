@@ -1,6 +1,6 @@
 '''
 
-sqlite list by Richard Ellicott
+sqlite list by Richard Ellicott (mescalin@gmail.com)
 
 
 Sources:
@@ -26,7 +26,7 @@ import random
 
 class SqliteList(object):
     '''
-    Version 1, experimental
+    not working on slices like [0:3]
     '''
 
     table = 'unnamed'
@@ -35,15 +35,9 @@ class SqliteList(object):
         '''
         create table if it does not exist
         '''
-        # v1 with id
-        # self.c.execute('CREATE TABLE IF NOT EXISTS "%s" (id INTEGER PRIMARY KEY AUTOINCREMENT, value BLOB)' % self.tablename)
-        # v2 no id
         self.c.execute('CREATE TABLE IF NOT EXISTS "%s" (value BLOB)' % self.table)
 
     def drop_table(self):
-        '''
-        drop table
-        '''
         self.c.execute('DROP TABLE "%s"' % self.table)
 
     def __init__(self, filename, pickle_data=True, autocommit=True):
@@ -242,11 +236,17 @@ class SqliteList(object):
         val = self.decode(val)
         return val
 
-    def __setitem__(self, index, value):
+    def get_rowid_by_index(self, row_number):
         '''
-        unoptimal, recreates list 
+        index as defined as the actual sequnece, first entry=0, second=1 etc
+        get record by the row number, this is unusual practise for a database
+        https://stackoverflow.com/questions/14782559/how-to-get-a-row-in-sqlite-by-index-not-by-id
         '''
+        self.c.execute('SELECT _rowid_ FROM unnamed LIMIT 1 OFFSET %s' % row_number)
+        row = self.c.fetchone()
+        return row[0]
 
+    def __setitem__(self, index, value):
         # version 1, just recreate the entire list, reference implementation
         # new_list = self.__list__()
         # new_list[key] = value
@@ -255,7 +255,6 @@ class SqliteList(object):
         # version 2
         # UPDATE COMPANY SET ADDRESS = 'Texas' WHERE ID = 6;
         # https://www.tutorialspoint.com/sqlite/sqlite_update_query.htm
-        # id neutral
         rowid = self.get_rowid_by_index(index)
         value = self.encode(value)
         self.c.execute('UPDATE unnamed SET value=? WHERE _rowid_ = %s' % rowid, (value,))
@@ -270,16 +269,6 @@ class SqliteList(object):
 
     def __repr__(self):
         return 'SqliteList(\'{}\')'.format(self.filename)
-
-    def get_rowid_by_index(self, row_number):
-        '''
-        index as defined as the actual sequnece, first entry=0, second=1 etc
-        get record by the row number, this is unusual practise for a database
-        https://stackoverflow.com/questions/14782559/how-to-get-a-row-in-sqlite-by-index-not-by-id
-        '''
-        self.c.execute('SELECT _rowid_ FROM unnamed LIMIT 1 OFFSET %s' % row_number)
-        row = self.c.fetchone()
-        return row[0]
 
     # def __unicode__(self):
     #     return unicode(self.__list__())

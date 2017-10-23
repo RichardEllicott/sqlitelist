@@ -53,8 +53,11 @@ print(sqlitelist.debug_info())
 
 print(list(sqlitelist))
 
-print(sqlitelist[-1])
+# print(sqlitelist[-1])
 
 
 # print(sqlitelist.get_random_index())
+
+
+# sqlitelist.insert(0,'6')
 
