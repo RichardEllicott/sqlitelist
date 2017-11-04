@@ -13,3 +13,11 @@ https://github.com/RaRe-Technologies/sqlitedict
 warning, this is unfinished, usable only in one of my projects at the moment
 
 it even breaks standard practise in SQLITE using an offset and not a primary key (it's not within sqlite spec, i had this discussion on stack overflow), i am gonna finish it later!
+
+the file format for example is WRONG at the moment, the final file format will have a primary key again:
+
+it will have id as autoincrement, because according to sqlite spec this is now an alias of the _uid_
+
+i had decided to remove this and WRONGLY use _uid_ or even more WRONGLY use 'offset'
+
+after this point, even with bugs, at least it will be compatible with itself in future
