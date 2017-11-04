@@ -9,3 +9,7 @@ https://github.com/RaRe-Technologies/sqlitedict
     for val in sqlitelist:
         print(val)
     sqlitelist.clear()
+
+warning, this is unfinished, usable only in one of my projects at the moment
+
+it even breaks standard practise in SQLITE using an offset and not a primary key (it's not within sqlite spec, i had this discussion on stack overflow), i am gonna finish it later!
