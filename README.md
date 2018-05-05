@@ -1,23 +1,44 @@
-sqlite list is a list style object, based on the epic sqlitedict:
+A drop in replacement for the list that saves it's data persistently in an sqlite file.
+
+A wrapper for the excellent SqliteDict:
 https://github.com/RaRe-Technologies/sqlitedict
 
-    from SqliteList import SqliteList
-    sqlitelist = SqliteList('database.sqlite')
-    sqlitelist.append('some string')
-    sqlitelist.append(1234)
-    sqlitelist.append(['any', 'picklable', 'object'])
-    for val in sqlitelist:
-        print(val)
-    sqlitelist.clear()
 
-warning, this is unfinished, usable only in one of my projects at the moment
+Example usage:
 
-it even breaks standard practise in SQLITE using an offset and not a primary key (it's not within sqlite spec, i had this discussion on stack overflow), i am gonna finish it later!
+with SqliteList('sqlitelist_test.sqlite', autocommit=True) as l:
+    l.clear()  # clear all items (in the file as well)
+    l.append('apple')  # append an item
+    l.extend(['orange', 'raspberry'])
+    l.append('potato')
+    l.insert(1, 'horse')
+    print('list:', l)
 
-the file format for example is WRONG at the moment, the final file format will have a primary key again:
 
-it will have id as autoincrement, because according to sqlite spec this is now an alias of the _uid_
+Reasoning:
 
-i had decided to remove this and WRONGLY use _uid_ or even more WRONGLY use 'offset'
+-existing SqliteList on pypy seemed to not work right!
+-https://github.com/hospadar/sqlite_object seems a little immature?
+-i have experimented with raw sqlite including index free methods that are faster and slower in certain ways
+-i just need a working version, so i built a wrapper for existing and professional code (this)
+-I personally put this to work webscraping, i have a requirement to fill up a list of links i want to follow, that are best represented as a list. You can end up with a lot of links and it would be worrying just putting them in a text/json file.
 
-after this point, even with bugs, at least it will be compatible with itself in future
+
+supported:
+clear
+get
+set
+append
+extend
+pop
+delete
+
+not-supported:
+reverse
+sort
+maybe more? 
+
+
+ISSUES:
+autocommit must be enabled, buggy if off
+the WHOLE db is copied to memory at the moment, which is easier to code. I built SqliteList for the convenience of easy persistent data and in this form it's already useful to me... however, later i will only copy out records as they are requested allowing dealing with massive data.
